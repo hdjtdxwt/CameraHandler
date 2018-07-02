@@ -6,16 +6,22 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.ImageFormat;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.ImageReader;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
+import android.os.HandlerThread;
+import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.FileProvider;
@@ -24,6 +30,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
 
 import com.epsit.camerahandler.utils.AlertError;
 import com.epsit.camerahandler.utils.Constants;
@@ -38,52 +45,66 @@ public class CameraActivity extends AppCompatActivity {
     protected String mPhotoFilePath = null;
     String mCameraId;
     CameraDevice mCameraDevice;
-    CaptureRequest.Builder mPreviewRequestBuilder;
+    CaptureRequest.Builder mPreviewBuilder;
     CaptureRequest mPreviewRequest;
     SurfaceHolder mSurfaceHolder;
-    SurfaceView surfaceView;
+    SurfaceView mSurfaceView;
     CameraCaptureSession mCaptureSession;
+    CameraManager mCameraManager;
+    ImageReader mImageReader;
+    int mState;
+    public static final int STATE_PREVIEW = 0;
+    public static final int STATE_WAITING_CAPTURE = 1;
+    CameraCaptureSession mSession;
 
-    Handler mBackgroundHandler = new Handler(){
+    Handler mHandler;
 
-    };
     @TargetApi(Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
-        surfaceView = (SurfaceView) findViewById(R.id.camera_surfaceview);
-        mSurfaceHolder = surfaceView.getHolder();
-
-        CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-        try {
-            //获取可用摄像头列表
-            for (String cameraId : manager.getCameraIdList()) {
-                //获取相机的相关参数
-                CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-                // 不使用前置摄像头。
-                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                    continue;
-                }
-                StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                if (map == null) {
-                    continue;
-                }
-                // 检查闪光灯是否支持。
-                Boolean available = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                mCameraId = cameraId;
-                Log.e(TAG, " 相机可用 ");
-                return;
+        mSurfaceView = (SurfaceView) findViewById(R.id.camera_surfaceview);
+        mSurfaceHolder = mSurfaceView.getHolder();
+        requestAllPermissionsIfNeed();
+        mCameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        mSurfaceHolder = mSurfaceView.getHolder();
+        mSurfaceHolder.addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) {
+                initCameraAndPreview();
             }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        } catch (NullPointerException e) {
-            //不支持Camera2API
-        }
 
+            @Override
+            public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+
+            }
+
+            @Override
+            public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
+
+            }
+        });
+    }
+
+    ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
+
+        @Override
+        public void onImageAvailable(ImageReader imageReader) {
+
+        }
+    };
+
+    private void initCameraAndPreview() {
+        Log.d("linc", "init camera and preview");
+        HandlerThread handlerThread = new HandlerThread("Camera2");
+        handlerThread.start();
+        mHandler = new Handler(handlerThread.getLooper());
         try {
-            //打开相机预览
+            mCameraId = "" + CameraCharacteristics.LENS_FACING_FRONT;
+            mImageReader = ImageReader.newInstance(mSurfaceView.getWidth(), mSurfaceView.getHeight(), ImageFormat.JPEG,/*maxImages*/7);
+            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mHandler);
+
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 // TODO: Consider calling
                 //    ActivityCompat#requestPermissions
@@ -94,13 +115,68 @@ public class CameraActivity extends AppCompatActivity {
                 // for ActivityCompat#requestPermissions for more details.
                 return;
             }
-            manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
+            mCameraManager.openCamera(mCameraId, DeviceStateCallback, mHandler);
         } catch (CameraAccessException e) {
-            e.printStackTrace();
+            Log.e("linc", "open camera failed." + e.getMessage());
         }
     }
+    private CameraDevice.StateCallback DeviceStateCallback = new CameraDevice.StateCallback() {
 
+        @Override
+        public void onOpened(CameraDevice camera) {
+            Log.d("linc","DeviceStateCallback:camera was opend.");
+           // mCameraOpenCloseLock.release();
+            mCameraDevice = camera;
+            try {
+                createCameraCaptureSession();
+            } catch (CameraAccessException e) {
+                e.printStackTrace();
+            }
+        }
 
+        @Override
+        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
+
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice cameraDevice, int i) {
+
+        }
+    };
+    private void createCameraCaptureSession() throws CameraAccessException {
+        Log.d("linc","createCameraCaptureSession");
+
+        mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+        mPreviewBuilder.addTarget(mSurfaceHolder.getSurface());
+        mState = STATE_PREVIEW;
+        mCameraDevice.createCaptureSession(
+                Arrays.asList(mSurfaceHolder.getSurface(), mImageReader.getSurface()),
+                mSessionPreviewStateCallback, mHandler);
+    }
+    private CameraCaptureSession.StateCallback mSessionPreviewStateCallback = new CameraCaptureSession.StateCallback() {
+
+        @Override
+        public void onConfigured(CameraCaptureSession session) {
+            Log.d("linc","mSessionPreviewStateCallback onConfigured");
+            mSession = session;
+            try {
+                mPreviewBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                mPreviewBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+                session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mHandler);
+            } catch (CameraAccessException e) {
+                e.printStackTrace();
+                Log.e("linc","set preview builder failed."+e.getMessage());
+            }
+        }
+
+        @Override
+        public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
+
+        }
+    };
     @TargetApi(Build.VERSION_CODES.M)
     protected void requestAllPermissionsIfNeed() {
         List<String> permissionList = new ArrayList<String>();
@@ -130,6 +206,53 @@ public class CameraActivity extends AppCompatActivity {
             requestPermissions( permissionList.toArray(new String[permissionList.size()]), 0);
         }
     }
+    private CameraCaptureSession.CaptureCallback mSessionCaptureCallback =
+            new CameraCaptureSession.CaptureCallback() {
+
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
+                                               TotalCaptureResult result) {
+                    //            Log.d("linc","mSessionCaptureCallback, onCaptureCompleted");
+                    mSession = session;
+                    checkState(result);
+                }
+
+                @Override
+                public void onCaptureProgressed(CameraCaptureSession session, CaptureRequest request,
+                                                CaptureResult partialResult) {
+                    Log.d("linc","mSessionCaptureCallback,  onCaptureProgressed");
+                    mSession = session;
+                    checkState(partialResult);
+                }
+
+                private void checkState(CaptureResult result) {
+                    switch (mState) {
+                        case STATE_PREVIEW:
+                            // NOTHING
+                            break;
+                        case STATE_WAITING_CAPTURE:
+                            int afState = result.get(CaptureResult.CONTROL_AF_STATE);
+
+                            if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
+                                    CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState
+                                    ||  CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED == afState
+                                    || CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED == afState) {
+                                //do something like save picture
+                            }
+                            break;
+                    }
+                }
+
+            };
+    public void onCapture(View view) {
+        try {
+            Log.i("linc", "take picture");
+            mState = STATE_WAITING_CAPTURE;
+            mSession.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -146,12 +269,12 @@ public class CameraActivity extends AppCompatActivity {
                 // private directory file for other applications, so we use the
                 // contentProvider to help us convert the restricted
                 // uri(file://) to an authorized share uri(content://)
-                if(Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+                /*if(Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
                     imageUri = Uri.parse("file://" + mPhotoFilePath);
                 }else{
                     File file = new File(mPhotoFilePath);
                     imageUri = FileProvider.getUriForFile(this, Constants.PROVIDER_NAME, file);
-                }
+                }*/
             }
             if (requestCode == Constants.PHOTO_REQUEST_GALLERY) {
                /* if(Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
@@ -181,72 +304,5 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
-    private final CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
-
-        @Override
-        public void onOpened(@NonNull CameraDevice cameraDevice) {
-            mCameraDevice = cameraDevice;
-            //创建CameraPreviewSession
-            createCameraPreviewSession();
-        }
-
-        @Override
-        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            cameraDevice.close();
-            mCameraDevice = null;
-        }
-
-        @Override
-        public void onError(@NonNull CameraDevice cameraDevice, int error) {
-            cameraDevice.close();
-            mCameraDevice = null;
-        }
-
-    };
-    /**
-     * 为相机预览创建新的CameraCaptureSession
-     */
-    private void createCameraPreviewSession() {
-        try {
-            //设置了一个具有输出Surface的CaptureRequest.Builder。
-            mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            mPreviewRequestBuilder.addTarget(mSurfaceHolder.getSurface());
-            //创建一个CameraCaptureSession来进行相机预览。
-            mCameraDevice.createCaptureSession(Arrays.asList(mSurfaceHolder.getSurface()),
-                    new CameraCaptureSession.StateCallback() {
-
-                        @Override
-                        public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
-                            // 相机已经关闭
-                            if (null == mCameraDevice) {
-                                return;
-                            }
-                            // 会话准备好后，我们开始显示预览
-                            mCaptureSession = cameraCaptureSession;
-                            try {
-                                // 自动对焦应
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                                // 闪光灯
-                                //setAutoFlash(mPreviewRequestBuilder);
-                                // 开启相机预览并添加事件
-                                mPreviewRequest = mPreviewRequestBuilder.build();
-                                //发送请求
-                                mCaptureSession.setRepeatingRequest(mPreviewRequest, null, mBackgroundHandler);
-                                Log.e(TAG," 开启相机预览并添加事件");
-                            } catch (CameraAccessException e) {
-                                e.printStackTrace();
-                            }
-                        }
-
-                        @Override
-                        public void onConfigureFailed( @NonNull CameraCaptureSession cameraCaptureSession) {
-                            Log.e(TAG," onConfigureFailed 开启预览失败");
-                        }
-                    }, null);
-        } catch (CameraAccessException e) {
-            Log.e(TAG," CameraAccessException 开启预览失败");
-            e.printStackTrace();
-        }
-    }
 
 }
