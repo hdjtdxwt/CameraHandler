@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">CameraHandler</string>
+
+    <string name="license_initing">正在初始化license</string>
+    <string name="manage_facedb">管理人脸库</string>
+    <string name="camera">相机</string>
+    <string name="gallery">相册</string>
+    <string name="cancel">取消</string>
+    <string name="no_feature_hint">人脸库为空，请通过“管理人脸库”来添加人脸信息</string>
+    <string name="error_title">出错啦</string>
+    <string name="license_error_hint">初始化License失败。</string>
+    <string name="error_code_hint">错误信息是：</string>
+    <string name="file_error_hint">文件读写错误，可能是没有读写权限</string>
+    <string name="licensefile_error_hint">授权文件读写错误，可能是没有读写权限</string>
+    <string name="no_licensefile_hint">工程的assets目录下缺少合适的 .lic文件</string>
+    <string name="no_face_feature">请选择有人脸的图片</string>
+    <string name="imagedescrib">图片 </string>
+    <string name="search">搜索中 </string>
+    <string name="ok">确定 </string>
+    <string name="similar_score">得分：</string>
+    <string name="no_camera_perm_hint">请打开相机权限，否则sample不能正常运行</string>
+    <string name="no_file_perm_hint">请打开存储权限，否则sample不能正常运行</string>
+    <string name="select_all">全选</string>
+    <string name="cancel_select_all">取消全选</string>
+    <string name="gallery_init">图库初始化</string>
+    <string name="no_media_string">相机拍摄目录下没有照片</string>
+    <string name="buiding_face_db">人脸库创建中</string>
+    <string name="delete_file_title">删除文件</string>
+    <string name="delete_file_hint">删除 %1$d 个文件内包含的人脸特征</string>
+    <string name="choose_delete_image">请选择需要删除的图片</string>
+</resources>
