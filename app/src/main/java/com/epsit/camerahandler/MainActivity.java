@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 
 import com.epsit.camerahandler.utils.AlertError;
@@ -15,13 +16,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-
+    String TAG ="MainActivity";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         findViewById(R.id.camera).setOnClickListener(this);
-        requestAllPermissionsIfNeed();
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){
+            Log.e(TAG,"=-----权限获取");
+            requestAllPermissionsIfNeed();
+        }
     }
     @TargetApi(Build.VERSION_CODES.M)
     protected void requestAllPermissionsIfNeed() {
@@ -54,6 +58,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
     @Override
     public void onClick(View v) {
-        startActivity(new Intent(this,TestActivity.class));
+        startActivity(new Intent(this, Camera1Activity.class));
     }
 }

@@ -20,11 +20,13 @@ import android.os.HandlerThread;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -52,13 +54,14 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String FRAGMENT_DIALOG = "dialog";
-
+    String TAG ="TestActivity";
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
         ORIENTATIONS.append(Surface.ROTATION_90, 0);
         ORIENTATIONS.append(Surface.ROTATION_180, 270);
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -76,6 +79,7 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
     @SuppressWarnings("ResourceType")
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+        Log.e(TAG,"onSurfaceTextureAvailable---权限检测");
         checkPermission();
         /**/
     }
@@ -93,7 +97,9 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
         //检查是否有权限
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 0);
+            Log.e(TAG,"checkPermission()-->权限申请-->");
         } else {
+            Log.e(TAG,"checkPermission()-->initCamera-->");
             initCamera();
         }
     }
@@ -137,8 +143,7 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 return;
             }
-            StreamConfigurationMap map = characteristics.get(
-                    CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            StreamConfigurationMap map = characteristics.get( CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             if (map == null) {
 
             }
@@ -157,6 +162,7 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
             e.printStackTrace();
         }
     }
+
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
             = new ImageReader.OnImageAvailableListener() {
 
@@ -166,8 +172,10 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
         }
 
     };
+
     @Override
-    public void onSurfaceTextureUpdated(SurfaceTexture surface) {}
+    public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+    }
 
     private CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
@@ -180,10 +188,12 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
         }
 
         @Override
-        public void onDisconnected(CameraDevice camera) {}
+        public void onDisconnected(CameraDevice camera) {
+        }
 
         @Override
-        public void onError(CameraDevice camera, int error) {}
+        public void onError(CameraDevice camera, int error) {
+        }
     };
 
     private void startPreview(CameraDevice camera) throws CameraAccessException {
@@ -213,38 +223,50 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
         }
 
         @Override
-        public void onConfigureFailed(CameraCaptureSession session) {}
+        public void onConfigureFailed(CameraCaptureSession session) {
+        }
     };
 
     public void takePicture() {
         try {
-            CaptureRequest.Builder captureRequestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-            // 将imageReader的surface作为CaptureRequest.Builder的目标
-            captureRequestBuilder.addTarget(mImageReader.getSurface());
-            // 自动对焦
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-            // 获取手机方向
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
-            // 根据设备方向计算设置照片的方向
-            captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
-            //拍照
-            CaptureRequest mCaptureRequest = captureRequestBuilder.build();
-            mSession.stopRepeating();
-            mSession.capture(mCaptureRequest, null, mHandler);
+            if (camera != null) {
+                CaptureRequest.Builder captureRequestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+                // 将imageReader的surface作为CaptureRequest.Builder的目标
+                captureRequestBuilder.addTarget(mImageReader.getSurface());
+                // 自动对焦
+                captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                // 获取手机方向
+                int rotation = getWindowManager().getDefaultDisplay().getRotation();
+                int rotationInfo = ORIENTATIONS.get(rotation);
+                Log.e("takePicture", "rotationInfo=" + rotationInfo);
+                // 根据设备方向计算设置照片的方向
+                captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, rotationInfo);
+                //拍照
+                CaptureRequest mCaptureRequest = captureRequestBuilder.build();
+                mSession.stopRepeating();
+                mSession.capture(mCaptureRequest, null, mHandler);
+            } else {
+                Toast.makeText(this, "camera打开失败了呀！！", Toast.LENGTH_SHORT).show();
+            }
+
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
     }
+
     private CameraCaptureSession.CaptureCallback mSessionCaptureCallback =
             new CameraCaptureSession.CaptureCallback() {
 
                 @Override
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
-                                               TotalCaptureResult result) {}
+                                               TotalCaptureResult result) {
+                }
 
                 @Override
                 public void onCaptureProgressed(CameraCaptureSession session, CaptureRequest request,
-                                                CaptureResult partialResult){}};
+                                                CaptureResult partialResult) {
+                }
+            };
 
     /**
      * 保存图片
@@ -289,4 +311,38 @@ public class TestActivity extends AppCompatActivity implements TextureView.Surfa
 
     }
 
+
+    @Override
+    protected void onPause() {
+        closeCamera();
+        stopBackgroundThread();
+        super.onPause();
+
     }
+
+    public void closeCamera() {
+        if (mSession != null) {
+            mSession.close();
+            mSession = null;
+        }
+        if (null != camera) {
+            camera.close();//关掉摄像头
+            camera = null;
+        }
+    }
+
+    /**
+     * Stops the background thread and its {@link Handler}.
+     */
+    private void stopBackgroundThread() {
+        mThreadHandler.quitSafely();//线程安全停止
+        try {
+            mThreadHandler.join();
+            mThreadHandler = null;
+            mHandler = null;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+    }
+}
