@@ -3,9 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/CameraHandler.iml" filepath="$PROJECT_DIR$/CameraHandler.iml" />
-      <module fileurl="file://$PROJECT_DIR$/CameraHandler.iml" filepath="$PROJECT_DIR$/CameraHandler.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/facedect/facedect.iml" filepath="$PROJECT_DIR$/facedect/facedect.iml" />
+      <module fileurl="file://$PROJECT_DIR$/facelibrary/facelibrary.iml" filepath="$PROJECT_DIR$/facelibrary/facelibrary.iml" />
     </modules>
   </component>
 </project>
